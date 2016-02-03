@@ -1,0 +1,106 @@
+# Copyright 2016 Produban Servicios Informáticos Generales S.L.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: v1
+kind: Template
+metadata:
+  annotations:
+    description: Cassandra cluster with no persistence (EXPERIMENTAL)
+    tags: cassandra, cluster, no production, experimental
+    iconClass: icon-database
+  name: cassandra-cluster-experimental
+objects:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    creationTimestamp: null
+    labels:
+      app_name: ${APP_NAME}
+      cassandra-node: "true"
+    name: ${APP_NAME}
+  spec:
+    ports:
+    - port: 9042
+      protocol: TCP
+      targetPort: 9042
+    selector:
+      app_name: ${APP_NAME}
+      cassandra-node: "true"
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: ReplicationController
+  metadata:
+    labels:
+      app_name: ${APP_NAME}
+    name: ${APP_NAME}
+  spec:
+    replicas: 1
+    selector:
+      app_name: ${APP_NAME}
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app_name: ${APP_NAME}
+          cassandra-node: "true"
+      spec:
+        containers:
+        - command:
+          - /run.sh
+          env:
+          - name: CASSANDRA_SERVICE
+            value: ${APP_NAME}
+          - name: DECOMMISSION_AT_SHUTDOWN
+            value: "true"
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          image: "docker.io/produban/cassandra-cluster:latest"
+          imagePullPolicy: Always
+          name: cassandra
+          ports:
+          - containerPort: 9042
+            name: cql
+            protocol: TCP
+          - containerPort: 9160
+            name: thrift
+            protocol: TCP
+          resources:
+            request:
+              memory: ${POD_MAX_MEM}M
+            limits:
+              memory: ${POD_MAX_MEM}M
+          terminationMessagePath: /dev/termination-log
+          volumeMounts:
+          - mountPath: /cassandra_data
+            name: data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        serviceAccount: cassandra
+        serviceAccountName: cassandra
+        terminationGracePeriodSeconds: 180
+        volumes:
+        - emptyDir: {}
+          name: data
+parameters:
+- description: Application name
+  displayName: Application Name
+  name: APP_NAME
+  required: true
+- description: Maximum memory for the pods (in Megabytes)
+  displayName: Pods Max Memory
+  name: POD_MAX_MEM
+  value: "1024"
